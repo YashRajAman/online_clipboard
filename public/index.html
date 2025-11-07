@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Online Clipboard - Real-time Sharing</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-clipboard"></i> Online Clipboard</h1>
+            <p>Share text in real-time across devices</p>
+        </header>
+
+        <div class="status-bar">
+            <div class="connection-status">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusText">Connecting...</span>
+            </div>
+            <div class="char-count">
+                <span id="charCount">0</span> characters
+            </div>
+        </div>
+
+        <div class="clipboard-container">
+            <textarea 
+                id="clipboardContent" 
+                placeholder="Type or paste your content here..."
+                spellcheck="true"
+            ></textarea>
+        </div>
+
+        <div class="controls">
+            <button id="saveBtn" class="btn btn-primary">
+                <i class="fas fa-save"></i> Save
+            </button>
+            <button id="refreshBtn" class="btn btn-secondary">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+            <button id="copyBtn" class="btn btn-success">
+                <i class="fas fa-copy"></i> Copy to Clipboard
+            </button>
+            <button id="clearBtn" class="btn btn-danger">
+                <i class="fas fa-trash"></i> Clear
+            </button>
+        </div>
+
+        <div class="features">
+            <div class="feature">
+                <i class="fas fa-bolt"></i>
+                <span>Real-time Sync</span>
+            </div>
+            <div class="feature">
+                <i class="fas fa-lock"></i>
+                <span>Secure</span>
+            </div>
+            <div class="feature">
+                <i class="fas fa-infinity"></i>
+                <span>Large Text Support</span>
+            </div>
+        </div>
+
+        <div id="notification" class="notification"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
