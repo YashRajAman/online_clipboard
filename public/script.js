@@ -2,6 +2,8 @@
 let ws = null;
 let autoSaveTimeout = null;
 let lastContent = '';
+const ENCRYPTION_KEY = 'online-clipboard-secure-key'; // Shared passphrase
+let cachedKey = null;
 
 // DOM elements
 const clipboardContent = document.getElementById('clipboardContent');
@@ -44,12 +46,15 @@ function connectWebSocket() {
         showNotification('Connection error', 'error');
     };
     
-    ws.onmessage = (event) => {
+    ws.onmessage = async (event) => {
         const data = JSON.parse(event.data);
-        if (data.type === 'update' && data.content !== clipboardContent.value) {
-            clipboardContent.value = data.content;
-            updateCharCount();
-            showNotification('Clipboard updated from another device', 'info');
+        if (data.type === 'update') {
+            const content = await decryptText(data.content);
+            if (content !== clipboardContent.value) {
+                clipboardContent.value = content;
+                updateCharCount();
+                showNotification('Clipboard updated from another device', 'info');
+            }
         }
     };
 }
@@ -112,8 +117,9 @@ async function loadClipboard() {
         const data = await response.json();
         
         if (data.content !== undefined) {
-            clipboardContent.value = data.content;
-            lastContent = data.content;
+            const content = await decryptText(data.content);
+            clipboardContent.value = content;
+            lastContent = content;
             updateCharCount();
             showNotification('Clipboard loaded', 'success');
         }
@@ -136,12 +142,14 @@ async function saveClipboard(isAutoSave = false) {
             saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
         }
         
+        const encryptedContent = await encryptText(content);
+        
         const response = await fetch('/api/clipboard', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ content }),
+            body: JSON.stringify({ content: encryptedContent }),
         });
         
         if (response.ok) {
@@ -202,4 +210,99 @@ function showNotification(message, type = 'info') {
     setTimeout(() => {
         notification.classList.remove('show');
     }, 3000);
+}
+
+// --- Encryption Helpers ---
+
+async function getCryptoKey() {
+    if (cachedKey) return cachedKey;
+    const enc = new TextEncoder();
+    const keyMaterial = await window.crypto.subtle.importKey(
+        "raw",
+        enc.encode(ENCRYPTION_KEY),
+        { name: "PBKDF2" },
+        false,
+        ["deriveKey"]
+    );
+    // Use a fixed salt to ensure the same key is derived on all devices
+    cachedKey = await window.crypto.subtle.deriveKey(
+        {
+            name: "PBKDF2",
+            salt: enc.encode("online-clipboard-salt"),
+            iterations: 100000,
+            hash: "SHA-256"
+        },
+        keyMaterial,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["encrypt", "decrypt"]
+    );
+    return cachedKey;
+}
+
+async function encryptText(text) {
+    try {
+        const key = await getCryptoKey();
+        const iv = window.crypto.getRandomValues(new Uint8Array(12));
+        const enc = new TextEncoder();
+        const encoded = enc.encode(text);
+        
+        const ciphertext = await window.crypto.subtle.encrypt(
+            { name: "AES-GCM", iv: iv },
+            key,
+            encoded
+        );
+        
+        // Combine IV and ciphertext
+        const combined = new Uint8Array(iv.length + ciphertext.byteLength);
+        combined.set(iv);
+        combined.set(new Uint8Array(ciphertext), iv.length);
+        
+        return arrayBufferToBase64(combined);
+    } catch (e) {
+        console.error('Encryption failed:', e);
+        return text;
+    }
+}
+
+async function decryptText(base64) {
+    try {
+        const combined = base64ToArrayBuffer(base64);
+        const iv = combined.slice(0, 12);
+        const ciphertext = combined.slice(12);
+        const key = await getCryptoKey();
+        
+        const decrypted = await window.crypto.subtle.decrypt(
+            { name: "AES-GCM", iv: new Uint8Array(iv) },
+            key,
+            ciphertext
+        );
+        
+        const dec = new TextDecoder();
+        return dec.decode(decrypted);
+    } catch (e) {
+        // Return original text if decryption fails (handles legacy plain text)
+        return base64;
+    }
+}
+
+function arrayBufferToBase64(buffer) {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    constHZ = 0x8000; // Chunk size to avoid stack overflow on large texts
+    for (let i = 0; i < len; i += constHZ) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + constHZ));
+    }
+    return window.btoa(binary);
+}
+
+function base64ToArrayBuffer(base64) {
+    const binary_string = window.atob(base64);
+    const len = binary_string.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+        bytes[i] = binary_string.charCodeAt(i);
+    }
+    return bytes.buffer;
 }
